@@ -82,18 +82,31 @@ class Converter
         StringBuilder result = new StringBuilder(input.Length);
         foreach (char c in input)
         {
-            if (lowerConsonants.Contains(c))
-            {
-                result.Append(lowerConsonants[lowerConsonants.Length - 1 - lowerConsonants.IndexOf(c)]);
-                continue;
-            }
-            if (upperConsonants.Contains(c))
-            {
-                result.Append(upperConsonants[upperConsonants.Length - 1 - upperConsonants.IndexOf(c)]);
-                continue;
-            }
-            result.Append(c);
+            result.Append(convert(c));
         }
         return result.ToString();
+    }
+
+    private static char convert(char c)
+    {
+        if (lowerConsonants.Contains(c))
+        {
+            return lowerConsonants[lowerConsonants.Length - 1 - lowerConsonants.IndexOf(c)];
+        }
+        if (upperConsonants.Contains(c))
+        {
+            return upperConsonants[upperConsonants.Length - 1 - upperConsonants.IndexOf(c)];
+        }
+        return c;
+    }
+
+    private static char[] convert(char[] chars, int count)
+    {
+        char[] result = new char[count];
+        for (int i = 0; i < count; i++)
+        {
+            result[i] = convert(chars[i]);
+        }
+        return result;
     }
 }
