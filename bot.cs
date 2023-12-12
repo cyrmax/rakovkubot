@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.IO;
+using System.Text;
 using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
@@ -52,11 +53,31 @@ class Program
     {
         logger?.LogDebug("Received update of type {UpdateType}", update.Type);
         if (update.Type != UpdateType.Message) return;
-        if (update.Message?.Text is not { } messageText) return;
-        logger?.LogDebug("Converting text message");
-        string result = await Converter.ConvertAsync(messageText, cancellationToken);
-        logger?.LogDebug("Sending converted text message");
-        await bot.SendTextMessageAsync(update.Message.Chat, result, replyToMessageId: update.Message.MessageId);
+        if (update.Message?.Text is { } messageText)
+        {
+            logger?.LogDebug("Converting text message");
+            string result = await Converter.ConvertAsync(messageText, cancellationToken);
+            logger?.LogDebug("Sending converted text message");
+            await bot.SendTextMessageAsync(update.Message.Chat, result, replyToMessageId: update.Message.MessageId);
+            return;
+        }
+        if (update.Message?.Document is { } document)
+        {
+            logger?.LogDebug("Converting document {docName}", document.FileName);
+            string inputFilename = Path.Combine(Path.GetTempPath(), document.FileName! + document.FileId);
+            string outputFilename = inputFilename + "done";
+            using (var stream = System.IO.File.Create(inputFilename))
+            {
+                logger?.LogDebug("Downloading document {docName}", document.FileName);
+                var file = await bot.GetInfoAndDownloadFileAsync(document.FileId, stream, cancellationToken);
+            }
+            logger?.LogDebug("Converting document {inputname} to {outputname}", inputFilename, outputFilename);
+            await Converter.convertFileAsync(inputFilename, outputFilename);
+            logger?.LogDebug("Sending converted document");
+            using var outputStream = System.IO.File.OpenRead(outputFilename);
+            await bot.SendDocumentAsync(update.Message.Chat, InputFile.FromStream(outputStream, document.FileName));
+            return;
+        }
     }
 
     // Here we do not use `async` keyword because the function does not do any awaitable operations. But we still need to return Task because `Telegram.Bot` architecture needs it. So we return `Task.CompletedTask` as a sort of stub.
@@ -108,5 +129,17 @@ class Converter
             result[i] = convert(chars[i]);
         }
         return result;
+    }
+
+    public static async Task convertFileAsync(string inputFilename, string outputFilename)
+    {
+        using var inputStream = new StreamReader(inputFilename);
+        using var outputStream = new StreamWriter(outputFilename);
+        int charsRead;
+        char[] readBuffer = new char[1024];
+        while ((charsRead = await inputStream.ReadAsync(readBuffer, 0, readBuffer.Length)) > 0)
+        {
+            await outputStream.WriteAsync(convert(readBuffer, charsRead), 0, charsRead);
+        }
     }
 }
